@@ -1,0 +1,253 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id       String  @id @default(cuid())
+  username String  @unique
+  name     String? @default("Anonymous")
+  avatar   String? @default("https://avatars.dicebear.com/api/initials/Anonymous.svg")
+  admin    Boolean @default(false)
+  verified Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  password        Password?
+  notes           Note[]
+  tasks           Task[] // Tasks that the user owns
+  tasks_assigned  Task[]         @relation("TaskAssignedMembers")
+  tasks_completed Task[]         @relation("TaskCompletedMembers")
+  spaces          Space[] // Spaces that the user owns
+  spaces_members  Space[]        @relation("SpaceMembers")
+  groups          Group[] // Groups that the user owns
+  groups_members  Group[]        @relation("GroupMembers")
+  budget          Budget[]
+  items           Item[]
+  projects        Project[]
+  phases          ProjectPhase[]
+  permissions     Permmision[]   @relation("UserPermissions")
+  payments        Payemnt[]
+
+  @@index([username], name: "username")
+}
+
+model Password {
+  hash String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String @unique
+}
+
+model Permmision {
+  id String @id @default(cuid())
+
+  name        String
+  description String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User[] @relation("UserPermissions")
+
+  @@index([name], name: "permission_name")
+}
+
+model Note {
+  id    String @id @default(cuid())
+  title String
+  body  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+}
+
+model Group {
+  id          String @id @default(cuid())
+  name        String
+  description String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members User[] @relation("GroupMembers") // Users that are members of the group
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  @@index([name, userId], name: "group_name")
+}
+
+model Task {
+  id        String    @id @default(cuid())
+  title     String
+  body      String
+  completed Boolean   @default(false)
+  dueDate   DateTime?
+  priority  Int?      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project   Project? @relation(fields: [projectId], references: [id])
+  projectId String?
+
+  assigned    User[] @relation("TaskAssignedMembers")
+  completedBy User[] @relation("TaskCompletedMembers")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  @@index([title, userId], name: "task_title")
+}
+
+model Space {
+  id          String  @id @default(cuid())
+  name        String
+  description String
+  color       String
+  private     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members User[] @relation("SpaceMembers")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  @@index([name, userId], name: "space_name")
+}
+
+model Budget {
+  id String @id @default(cuid())
+
+  year Int @default(2023)
+  cost Int @default(0)
+  cash Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  itemId String
+
+  projects Project[]
+  payments Payemnt[]
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  @@index([year, userId, itemId], name: "budget_name")
+}
+
+model Item {
+  id          String    @id @default(cuid())
+  name        String
+  description String
+  started     DateTime?
+  ended       DateTime?
+
+  reference String? @default("") // Reference to the item
+  number    String? @default("") // Number of the item
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  budget   Budget[] // Budgets that the item is associated with
+  projects Project[] // Projects that the item is associated with
+  payments Payemnt[] // Payments that the item is associated with
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  @@index([name, userId, reference, number], name: "item_name")
+}
+
+model Payemnt {
+  id String @id @default(cuid())
+
+  note String?   @default("") // Note about the payment
+  cost Float     @default(0) // Cost of the payment
+  date DateTime?
+
+  budget   Budget? @relation(fields: [budgetId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  budgetId String?
+
+  item   Item?   @relation(fields: [itemId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  itemId String?
+
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  projectId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  @@index([userId, budgetId, itemId], name: "payment_name")
+}
+
+model Project {
+  id String @id @default(cuid())
+
+  name        String
+  description String
+  cost        Float     @default(0) // Cost of the project
+  started     DateTime?
+  ended       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // budget   Budget? @relation(fields: [budgetId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  // budgetId String?
+  // replace budget with started and ended dates
+  // meaning that the project is associated with a budget
+  // between the started and ended dates
+
+  item   Item?   @relation(fields: [itemId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  itemId String?
+
+  // budget   Budget[] // Budgets that the project is associated with
+  // items    Item[] // Items that the project is associated with
+  tasks    Task[] // Tasks that the project is associated with
+  payments Payemnt[] // Payments that the project is associated with
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  phase    ProjectPhase? @relation(fields: [phaseId], references: [id])
+  phaseId  String?
+  Budget   Budget?       @relation(fields: [budgetId], references: [id])
+  budgetId String?
+
+  @@index([name, userId], name: "project_name")
+}
+
+model ProjectPhase {
+  id String @id @default(cuid())
+
+  name        String
+  description String  @default("")
+  color       String? @default("#000000")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[]
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+
+  @@index([name, userId], name: "status_name")
+}
